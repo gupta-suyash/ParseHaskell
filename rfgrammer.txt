@@ -1,0 +1,51 @@
+Goal			::=	(MethodDeclaration)* <EOF>
+MethodDeclaration	::=	"def" Identifier "(" ( FormalParameterList )? ")" "{" ( Statement )* "return" Expression "}"
+FormalParameterList	::=	Identifier ( FormalParameterRest )*
+FormalParameterRest	::=	"," Identifier
+Statement		::=	TransactionStatement
+			|	AssignmentStatement
+			|	IfStatement
+			|	AssertStatement
+			|	SQLWriteStatement
+TransactionStatement	::=	"transaction do" (Statement)* "end"
+AssignmentStatement	::=	Identifier "=" Expression
+IfStatement		::=	"if" Expression "then" (Statement)* "else" (Statement)* "end"
+ForeachStatement	::=	Identifier "." "each" "|" Identifier "|" "do" (Statement)* "end"
+AssertStatement		::=	"assert" "(" Expression ")"
+SQLWriteStatement	::=	"SQL" SQLWriteQuery
+SQLWriteQuery		::=	Update
+			|	Delete
+			|	InsertInto
+Expression		::=	AndExpression
+			|	OrExpression
+			|	CompareExpression
+			|	PlusExpression
+			|	MinusExpression
+			|	TimesExpression
+			|	SQLReadQuery
+			|	PrimaryExpression
+AndExpression		::=	PrimaryExpression "&&" PrimaryExpression
+AndExpression		::=	PrimaryExpression "||" PrimaryExpression
+LessExpression		::=	PrimaryExpression "<" PrimaryExpression
+GreaterExpression	::=	PrimaryExpression ">" PrimaryExpression
+LessEqualExpression	::=	PrimaryExpression "<=" PrimaryExpression
+GreaterEqualExpression	::=	PrimaryExpression ">=" PrimaryExpression
+PlusExpression		::=	PrimaryExpression "+" PrimaryExpression
+MinusExpression		::=	PrimaryExpression "-" PrimaryExpression
+TimesExpression		::=	PrimaryExpression "*" PrimaryExpression
+SQLReadQuery		::=	"SQL" Select
+PrimaryExpression	::=	IntegerLiteral
+			|	TrueLiteral
+			|	FalseLiteral
+			|	Identifier
+			|	NotExpression
+			|	BracketExpression
+			|	DotExpression
+IntegerLiteral		::=	<INTEGER_LITERAL>
+TrueLiteral		::=	"true"
+FalseLiteral		::=	"false"
+Identifier		::=	<IDENTIFIER>
+NotExpression		::=	"!" Expression
+BracketExpression	::=	"(" Expression ")"
+DotExpression		::=	PrimaryExpression "." Identifier
+	
