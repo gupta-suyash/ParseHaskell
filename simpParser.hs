@@ -1,3 +1,5 @@
+-- Source: Haskell Wiki
+
 import Control.Applicative((<*))
 import Text.Parsec
 import Text.Parsec.String
