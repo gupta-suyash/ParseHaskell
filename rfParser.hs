@@ -17,8 +17,14 @@ data Stmt = Nop
 	| If Expr Stmt Stmt 
 	| Assert (Expr)
 	| Transaction Stmt
+	| Foreach Stmt
 	| Seq [Stmt]
 		deriving Show
+
+data Param 	= PList [Param]
+		| String
+data Method 	= Method String Param Stmt 
+data Goal 	= MList [Method]
 
 
 def = emptyDef{ commentStart = "{-"
@@ -27,10 +33,10 @@ def = emptyDef{ commentStart = "{-"
 	, identLetter = alphaNum
 	, opStart = oneOf "~&=:"
 	, opLetter = oneOf "~&=:"
-	, reservedOpNames = ["~", "&", "=", ":="]
+	, reservedOpNames = ["~", "&", "=", ":=", "|"]
 	, reservedNames = ["true", "false", "nop",
 			"if", "then", "else", "end",
-			"assert", "do", 
+			"assert", "do", "foreach",  
 			"transaction"]
 	}
 
@@ -83,6 +89,16 @@ mainparser = m_whiteSpace >> stmtparser <* eof
 			; p <- stmtparser
 			; m_reserved "end"
 			; return (Transaction p)
+			}
+		<|> do	{ m_reserved "foreach"
+			; exprparser
+			; m_reservedOp "|"
+			; exprparser
+			; m_reservedOp "|"
+			; m_reserved "do" 
+			; st <- stmtparser
+			; m_reserved "end"
+			; return (Foreach st)
 			} 
 
 play :: String -> IO ()
