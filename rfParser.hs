@@ -21,10 +21,9 @@ data Stmt = Nop
 	| Seq [Stmt]
 		deriving Show
 
-data Param 	= PList [Param]
-		| String
-data Method 	= Method String Param Stmt 
-data Goal 	= MList [Method]
+data Param 	= PList [Expr] deriving Show
+data Method 	= Mtd String Param Stmt deriving Show 
+--data Goal 	= MList [Method] deriving Show
 
 
 def = emptyDef{ commentStart = "{-"
@@ -33,10 +32,10 @@ def = emptyDef{ commentStart = "{-"
 	, identLetter = alphaNum
 	, opStart = oneOf "~&=:"
 	, opLetter = oneOf "~&=:"
-	, reservedOpNames = ["~", "&", "=", ":=", "|"]
+	, reservedOpNames = ["~", "&", "=", ":=", "|", "(", ")"]
 	, reservedNames = ["true", "false", "nop",
 			"if", "then", "else", "end",
-			"assert", "do", "foreach",  
+			"assert", "do", "foreach", "def",  
 			"transaction"]
 	}
 
@@ -46,6 +45,7 @@ TokenParser{ parens = m_parens
 	, reservedOp = m_reservedOp
 	, reserved = m_reserved
 	, semiSep1 = m_semiSep1
+	, commaSep1 = m_commaSep1
 	, whiteSpace = m_whiteSpace } = makeTokenParser def
 
 
@@ -60,8 +60,36 @@ term = m_parens exprparser
 	<|> (m_reserved "true" >> return (Con True))
 	<|> (m_reserved "false" >> return (Con False))
 
-mainparser :: Parser Stmt
-mainparser = m_whiteSpace >> stmtparser <* eof
+
+-- Accepts comma separated arguments
+paramparser :: Parser Param
+paramparser = m_whiteSpace >> argparser
+	where
+	  argparser :: Parser Param
+	  argparser = fmap PList (m_commaSep1 exprparser)
+
+
+-- Accepts a method, but while specifing parameters there is a need of space between
+-- brackets "(" and ")" and arguments.
+methodparser :: Parser Method
+methodparser = m_whiteSpace >> functparser <* eof
+	where
+	  functparser :: Parser Method
+	  functparser = mthd
+	  mthd = do 	{ m_reserved "def"
+			; v <- m_identifier
+			; m_reserved "("
+			; p <- paramparser
+			; m_reservedOp ")"
+			; s <- statementparser
+			; m_reserved "end"
+			; return (Mtd v p s)
+			}
+
+
+-- Every statement is separated by a semi-colon. We have used semiSep1.
+statementparser :: Parser Stmt
+statementparser = m_whiteSpace >> stmtparser -- <* eof
     where
       stmtparser :: Parser Stmt
       stmtparser = fmap Seq (m_semiSep1 stmt1)
@@ -102,10 +130,21 @@ mainparser = m_whiteSpace >> stmtparser <* eof
 			} 
 
 play :: String -> IO ()
-play inp = case parse mainparser "" inp of
+play inp = case parse methodparser "" inp of
              { Left err -> print err
              ; Right ans -> print ans
              }
+
+
+--play inp = case parse paramparser "" inp of
+--             { Left err -> print err
+--             ; Right ans -> print ans
+--             }
+
+--play inp = case parse mainparser "" inp of
+--             { Left err -> print err
+--             ; Right ans -> print ans
+--             }
 
 main :: IO ()
 main = do
