@@ -1,0 +1,3 @@
+def foo ( a,b ) a:=b end
+
+// Output --> Mtd "foo" (PList [Var "a",Var "b"]) (Seq ["a" := Var "b"])

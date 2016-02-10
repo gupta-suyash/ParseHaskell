@@ -1,0 +1,4 @@
+def foo ( a,b ) a:=b&c end
+
+// Output --> 
+// Mtd "foo" (PList [Var "a",Var "b"]) (Seq ["a" := Duo And (Var "b") (Var "c")])

@@ -1,0 +1,4 @@
+def foo ( a,b ) assert (!a.b) end
+
+// Output --> 
+// Mtd "foo" (PList [Var "a",Var "b"]) (Seq [Assert (Duo Dot (Uno Not (Var "a")) (Var "b"))]) 
