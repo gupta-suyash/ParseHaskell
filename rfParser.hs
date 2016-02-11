@@ -3,6 +3,7 @@
 import System.IO
 
 import Control.Applicative((<*))
+import Control.Monad (void)
 import Text.Parsec
 import Text.Parsec.String
 import Text.Parsec.Expr
@@ -51,6 +52,11 @@ TokenParser{ parens = m_parens
 	, whiteSpace = m_whiteSpace } = makeTokenParser def
 
 
+-- Accepting different form of whitespace
+whitespace :: Parser ()
+whitespace = void $ many $ oneOf " \n\t"
+
+
 exprparser :: Parser Expr
 exprparser = buildExpressionParser table term <?> "expression"
 table = [ [Prefix (m_reservedOp "!" >> return (Uno Not))]
@@ -69,7 +75,8 @@ term = m_parens exprparser
 
 -- Accepts comma separated arguments
 paramparser :: Parser Param
-paramparser = m_whiteSpace >> argparser
+--paramparser = m_whiteSpace >> argparser
+paramparser = whitespace >> argparser
 	where
 	  argparser :: Parser Param
 	  argparser = fmap PList (m_commaSep1 exprparser)
@@ -78,17 +85,19 @@ paramparser = m_whiteSpace >> argparser
 -- Accepts a method, but while specifing parameters there is a need of space between
 -- brackets "(" and ")" and arguments.
 methodparser :: Parser Method
-methodparser = m_whiteSpace >> functparser <* eof
+--methodparser = m_whiteSpace >> functparser <* eof
+methodparser = whitespace >> functparser <* eof
 	where
 	  functparser :: Parser Method
 	  functparser = mthd
 	  mthd = do 	{ m_reserved "def"
 			; v <- m_identifier
 			; m_reserved "("
-			--; m_whiteSpace
+			--; whitespace
 			; p <- paramparser
 			; m_reservedOp ")"
 			; s <- statementparser
+			; whitespace
 			; m_reserved "end"
 			; return (Mtd v p s)
 			}
@@ -96,32 +105,38 @@ methodparser = m_whiteSpace >> functparser <* eof
 
 -- Every statement is separated by a semi-colon. We have used semiSep1.
 statementparser :: Parser Stmt
-statementparser = m_whiteSpace >> stmtparser -- <* eof
+--statementparser = m_whiteSpace >> stmtparser -- <* eof
+statementparser = whitespace >> stmtparser -- <* eof
     where
       stmtparser :: Parser Stmt
       stmtparser = fmap Seq (m_semiSep1 stmt1)
       stmt1 = (m_reserved "nop" >> return Nop)
 		<|> do { v <- m_identifier
-		       ; m_reservedOp ":="
-		       ; e <- exprparser
-		       ; return (v := e)
-		       }
+			; m_reservedOp ":="
+			; e <- exprparser
+			; return (v := e)
+			}
 		<|> do { m_reserved "if"
-		       ; b <- exprparser
-		       ; m_reserved "then"
-		       ; p <- stmtparser
-		       ; m_reserved "else"
-		       ; q <- stmtparser
-		       ; m_reserved "end"
-		       ; return (If b p q)
-		       }
+			; b <- exprparser
+			; whitespace
+			; m_reserved "then"
+			; p <- stmtparser
+			; whitespace
+			; m_reserved "else"
+			; q <- stmtparser
+			; whitespace
+			; m_reserved "end"
+			; return (If b p q)
+			}
 		<|> do 	{ m_reserved "assert"
 			; b <- exprparser
 			; return (Assert b)
 			}
 		<|> do	{ m_reserved "transaction"
+			; whitespace
 			; m_reserved "do"
 			; p <- stmtparser
+			; whitespace
 			; m_reserved "end"
 			; return (Transaction p)
 			}
@@ -132,6 +147,7 @@ statementparser = m_whiteSpace >> stmtparser -- <* eof
 			; m_reservedOp "|"
 			; m_reserved "do" 
 			; st <- stmtparser
+			; whitespace
 			; m_reserved "end"
 			; return (Foreach st)
 			} 
