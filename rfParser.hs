@@ -1,24 +1,26 @@
 -- Parser based on RFGrammar
 
+import System.IO
+
 import Control.Applicative((<*))
 import Text.Parsec
 import Text.Parsec.String
 import Text.Parsec.Expr
 import Text.Parsec.Token
 import Text.Parsec.Language
+import Text.Parsec.Char
 
-
-data Expr = Var String | Con Bool | Uno Unop Expr | Duo Duop Expr Expr
+data Expr 	= Var String | Con Bool | Uno Unop Expr | Duo Duop Expr Expr 
 		deriving Show
-data Unop = Not deriving Show
-data Duop = And | Iff deriving Show
-data Stmt = Nop 
-	| String := Expr 
-	| If Expr Stmt Stmt 
-	| Assert (Expr)
-	| Transaction Stmt
-	| Foreach Stmt
-	| Seq [Stmt]
+data Unop 	= Not deriving Show
+data Duop 	= And | Or | Geq | Sub | Dot | Iff deriving Show
+data Stmt 	= Nop 
+		| String := Expr 
+		| If Expr Stmt Stmt 
+		| Assert (Expr)
+		| Transaction Stmt
+		| Foreach Stmt
+		| Seq [Stmt]
 		deriving Show
 
 data Param 	= PList [Expr] deriving Show
@@ -30,9 +32,9 @@ def = emptyDef{ commentStart = "{-"
 	, commentEnd = "-}"
 	, identStart = letter
 	, identLetter = alphaNum
-	, opStart = oneOf "~&=:"
-	, opLetter = oneOf "~&=:"
-	, reservedOpNames = ["~", "&", "=", ":=", "|", "(", ")"]
+	, opStart = oneOf "!&>=:|-."
+	, opLetter = oneOf "!&>=:|-."
+	, reservedOpNames = ["!", "&", ">=", "=", "-", ":=", "|", ".", "(", ")"]
 	, reservedNames = ["true", "false", "nop",
 			"if", "then", "else", "end",
 			"assert", "do", "foreach", "def",  
@@ -51,8 +53,12 @@ TokenParser{ parens = m_parens
 
 exprparser :: Parser Expr
 exprparser = buildExpressionParser table term <?> "expression"
-table = [ [Prefix (m_reservedOp "~" >> return (Uno Not))]
+table = [ [Prefix (m_reservedOp "!" >> return (Uno Not))]
 	, [Infix (m_reservedOp "&" >> return (Duo And)) AssocLeft]
+	, [Infix (m_reservedOp "|" >> return (Duo Or)) AssocLeft]
+	, [Infix (m_reservedOp ">=" >> return (Duo Geq)) AssocLeft]
+	, [Infix (m_reservedOp "-" >> return (Duo Sub)) AssocLeft]
+	, [Infix (m_reservedOp "." >> return (Duo Dot)) AssocLeft]
 	, [Infix (m_reservedOp "=" >> return (Duo Iff)) AssocLeft]
 	]
 term = m_parens exprparser
@@ -79,6 +85,7 @@ methodparser = m_whiteSpace >> functparser <* eof
 	  mthd = do 	{ m_reserved "def"
 			; v <- m_identifier
 			; m_reserved "("
+			--; m_whiteSpace
 			; p <- paramparser
 			; m_reservedOp ")"
 			; s <- statementparser
@@ -136,11 +143,6 @@ play inp = case parse methodparser "" inp of
              }
 
 
---play inp = case parse paramparser "" inp of
---             { Left err -> print err
---             ; Right ans -> print ans
---             }
-
 --play inp = case parse mainparser "" inp of
 --             { Left err -> print err
 --             ; Right ans -> print ans
@@ -148,7 +150,13 @@ play inp = case parse methodparser "" inp of
 
 main :: IO ()
 main = do
-	putStrLn "Hello World"
-	name <- getLine 
-	play name
+	putStrLn "Starting Parser"
+	putStrLn "Enter filename: "
+	fname <- getLine
+	fhandle <- openFile fname ReadMode  
+    	contents <- hGetContents fhandle  
+	putStrLn "Input to parse: "
+    	putStr contents  
+	play contents
+	hClose fhandle
 	return ()

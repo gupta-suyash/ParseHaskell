@@ -4,5 +4,4 @@ This repository consists of:
 -- A BNF grammar of interest.
 -- A parser for the grammar.
 
--- The testcases for the rfParser, need to pasted at command line during runtime.
--- The expected output is written within each testcase as a comment (//)
+-- The testcases for the rfParser can be given as the input during runtime.

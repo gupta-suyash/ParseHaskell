@@ -1,4 +1,1 @@
 def foo ( a ) if a then assert (a|b) else b:=a end end
-
-// Output --> 
-// Mtd "foo" (PList [Var "a"]) (Seq [If (Var "a") (Seq [Assert (Duo Or (Var "a") (Var "b"))]) (Seq ["b" := Var "a"])])

@@ -1,0 +1,1 @@
+def foo ( acc,amt ) error := false; transaction do assert (!usr.empty); if bal >= amt then newbal := bal - amt else error := true end end end
