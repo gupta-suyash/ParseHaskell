@@ -22,12 +22,13 @@ data Stmt 	= Nop
 		| Assert (Expr)
 		| Transaction Stmt
 		| Foreach Stmt
+		| Throw Expr
 		| Seq [Stmt]
 		deriving Show
 
 data Param 	= PList [Expr] deriving Show
-data Method 	= Mtd String Param Stmt deriving Show 
-data Goal 	= MList [Method] deriving Show
+data Method 	= Mtd String Param Stmt 
+		| MList [Method] deriving Show 
 
 
 def = emptyDef{ commentStart = "{-"
@@ -36,8 +37,8 @@ def = emptyDef{ commentStart = "{-"
 	, identLetter = alphaNum
 	, opStart = oneOf "!&>=:|-."
 	, opLetter = oneOf "!&>=:|-."
-	, reservedOpNames = ["!", "&", ">=", "=", "-", ":=", "|", "."]--, "(", ")"]
-	, reservedNames = ["true", "false", "nop",
+	, reservedOpNames = ["!", "&", ">=", "=", "-", ":=", "|", "."]
+	, reservedNames = ["true", "false", "nop", "throw", 
 			"if", "then", "else", "end",
 			"assert", "do", "foreach", "def",  
 			"transaction"]
@@ -63,7 +64,7 @@ leftparan = char '('
 rightparan :: Parser Char
 rightparan = char ')'
 
-
+-- Accepts expressions.
 exprparser :: Parser Expr
 exprparser = buildExpressionParser table term <?> "expression"
 table = [ [Prefix (m_reservedOp "!" >> return (Uno Not))]
@@ -88,12 +89,12 @@ paramparser = whitespace >> argparser
 	  argparser = fmap PList (m_commaSep1 exprparser)
 
 
--- Accepts a method.
+-- Accepts one or more methods.
 methodparser :: Parser Method
 methodparser = whitespace >> functparser <* eof
 	where
 	  functparser :: Parser Method
-	  functparser = mthd
+	  functparser = fmap MList (many1 mthd)
 	  mthd = do 	{ m_reserved "def"
 			; v <- m_identifier
 			; leftparan
@@ -113,7 +114,7 @@ statementparser = whitespace >> stmtparser
     where
       stmtparser :: Parser Stmt
       stmtparser = fmap Seq (m_semiSep1 stmt1)
-      stmt1 = try nopst <|> try assignst <|> try ifelsest <|> try ifst <|> try transtst <|> try assertst <|> try foreachst
+      stmt1 = try nopst <|> try assignst <|> try ifelsest <|> try ifst <|> try transtst <|> try assertst <|> try foreachst <|> try throwst
 
 nopst = do 	{ m_reserved "nop" 
 		; return Nop
@@ -168,6 +169,10 @@ foreachst = do	{ m_reserved "foreach"
 		; m_reserved "end"
 		; return (Foreach st)
 		} 
+throwst = do	{ m_reserved "throw"
+		; e <- exprparser
+		; return (Throw e)
+		}
 
 play :: String -> IO ()
 play inp = case parse methodparser "" inp of
@@ -175,11 +180,6 @@ play inp = case parse methodparser "" inp of
              ; Right ans -> print ans
              }
 
-
---play inp = case parse mainparser "" inp of
---             { Left err -> print err
---             ; Right ans -> print ans
---             }
 
 main :: IO ()
 main = do
