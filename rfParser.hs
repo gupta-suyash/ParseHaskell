@@ -12,12 +12,13 @@ import Text.Parsec.Language
 import Text.Parsec.Char
 
 data Expr 	= Var String | Con Bool | Uno Unop Expr | Duo Duop Expr Expr 
-		deriving Show
+		| Dot Expr Expr deriving Show
 data Unop 	= Not deriving Show
-data Duop 	= And | Or | Geq | Sub | Dot | Iff deriving Show
+data Duop 	= And | Or | Geq | Sub | Iff deriving Show
 data Stmt 	= Nop 
 		| String := Expr 
-		| If Expr Stmt Stmt 
+		| IfEl Expr Stmt Stmt 
+		| If Expr Stmt
 		| Assert (Expr)
 		| Transaction Stmt
 		| Foreach Stmt
@@ -26,7 +27,7 @@ data Stmt 	= Nop
 
 data Param 	= PList [Expr] deriving Show
 data Method 	= Mtd String Param Stmt deriving Show 
---data Goal 	= MList [Method] deriving Show
+data Goal 	= MList [Method] deriving Show
 
 
 def = emptyDef{ commentStart = "{-"
@@ -35,7 +36,7 @@ def = emptyDef{ commentStart = "{-"
 	, identLetter = alphaNum
 	, opStart = oneOf "!&>=:|-."
 	, opLetter = oneOf "!&>=:|-."
-	, reservedOpNames = ["!", "&", ">=", "=", "-", ":=", "|", ".", "(", ")"]
+	, reservedOpNames = ["!", "&", ">=", "=", "-", ":=", "|", "."]--, "(", ")"]
 	, reservedNames = ["true", "false", "nop",
 			"if", "then", "else", "end",
 			"assert", "do", "foreach", "def",  
@@ -56,6 +57,12 @@ TokenParser{ parens = m_parens
 whitespace :: Parser ()
 whitespace = void $ many $ oneOf " \n\t"
 
+leftparan :: Parser Char
+leftparan = char '('
+
+rightparan :: Parser Char
+rightparan = char ')'
+
 
 exprparser :: Parser Expr
 exprparser = buildExpressionParser table term <?> "expression"
@@ -64,7 +71,7 @@ table = [ [Prefix (m_reservedOp "!" >> return (Uno Not))]
 	, [Infix (m_reservedOp "|" >> return (Duo Or)) AssocLeft]
 	, [Infix (m_reservedOp ">=" >> return (Duo Geq)) AssocLeft]
 	, [Infix (m_reservedOp "-" >> return (Duo Sub)) AssocLeft]
-	, [Infix (m_reservedOp "." >> return (Duo Dot)) AssocLeft]
+	, [Infix (m_reservedOp "." >> return (Dot)) AssocLeft]
 	, [Infix (m_reservedOp "=" >> return (Duo Iff)) AssocLeft]
 	]
 term = m_parens exprparser
@@ -75,27 +82,23 @@ term = m_parens exprparser
 
 -- Accepts comma separated arguments
 paramparser :: Parser Param
---paramparser = m_whiteSpace >> argparser
 paramparser = whitespace >> argparser
 	where
 	  argparser :: Parser Param
 	  argparser = fmap PList (m_commaSep1 exprparser)
 
 
--- Accepts a method, but while specifing parameters there is a need of space between
--- brackets "(" and ")" and arguments.
+-- Accepts a method.
 methodparser :: Parser Method
---methodparser = m_whiteSpace >> functparser <* eof
 methodparser = whitespace >> functparser <* eof
 	where
 	  functparser :: Parser Method
 	  functparser = mthd
 	  mthd = do 	{ m_reserved "def"
 			; v <- m_identifier
-			; m_reserved "("
-			--; whitespace
+			; leftparan
 			; p <- paramparser
-			; m_reservedOp ")"
+			; rightparan
 			; s <- statementparser
 			; whitespace
 			; m_reserved "end"
@@ -104,53 +107,67 @@ methodparser = whitespace >> functparser <* eof
 
 
 -- Every statement is separated by a semi-colon. We have used semiSep1.
+-- The last statement should not have a semi-colon.
 statementparser :: Parser Stmt
---statementparser = m_whiteSpace >> stmtparser -- <* eof
-statementparser = whitespace >> stmtparser -- <* eof
+statementparser = whitespace >> stmtparser 
     where
       stmtparser :: Parser Stmt
       stmtparser = fmap Seq (m_semiSep1 stmt1)
-      stmt1 = (m_reserved "nop" >> return Nop)
-		<|> do { v <- m_identifier
-			; m_reservedOp ":="
-			; e <- exprparser
-			; return (v := e)
-			}
-		<|> do { m_reserved "if"
-			; b <- exprparser
-			; whitespace
-			; m_reserved "then"
-			; p <- stmtparser
-			; whitespace
-			; m_reserved "else"
-			; q <- stmtparser
-			; whitespace
-			; m_reserved "end"
-			; return (If b p q)
-			}
-		<|> do 	{ m_reserved "assert"
-			; b <- exprparser
-			; return (Assert b)
-			}
-		<|> do	{ m_reserved "transaction"
-			; whitespace
-			; m_reserved "do"
-			; p <- stmtparser
-			; whitespace
-			; m_reserved "end"
-			; return (Transaction p)
-			}
-		<|> do	{ m_reserved "foreach"
-			; exprparser
-			; m_reservedOp "|"
-			; exprparser
-			; m_reservedOp "|"
-			; m_reserved "do" 
-			; st <- stmtparser
-			; whitespace
-			; m_reserved "end"
-			; return (Foreach st)
-			} 
+      stmt1 = try nopst <|> try assignst <|> try ifelsest <|> try ifst <|> try transtst <|> try assertst <|> try foreachst
+
+nopst = do 	{ m_reserved "nop" 
+		; return Nop
+		}
+
+assignst = do 	{ v <- m_identifier
+		; m_reservedOp ":="
+		; e <- exprparser
+		; return (v := e)
+		}
+ifelsest = do 	{ m_reserved "if"
+		; b <- exprparser
+		; whitespace
+		; m_reserved "then"
+		; p <- statementparser
+		; whitespace
+		; m_reserved "else"
+		; q <- statementparser
+		; whitespace
+		; m_reserved "end"
+		; return (IfEl b p q)
+		}
+ifst =  do 	{ m_reserved "if"
+		; b <- exprparser
+		; whitespace
+		; m_reserved "then"
+		; p <- statementparser
+		; whitespace
+		; m_reserved "end"
+		; return (If b p)
+		}
+assertst = do 	{ m_reserved "assert"
+		; b <- exprparser
+		; return (Assert b)
+		}
+transtst = do	{ m_reserved "transaction"
+		; whitespace
+		; m_reserved "do"
+		; p <- statementparser
+		; whitespace
+		; m_reserved "end"
+		; return (Transaction p)
+		}
+foreachst = do	{ m_reserved "foreach"
+		; exprparser
+		; m_reservedOp "|"
+		; exprparser
+		; m_reservedOp "|"
+		; m_reserved "do" 
+		; st <- statementparser
+		; whitespace
+		; m_reserved "end"
+		; return (Foreach st)
+		} 
 
 play :: String -> IO ()
 play inp = case parse methodparser "" inp of
