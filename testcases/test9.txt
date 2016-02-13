@@ -1,0 +1,20 @@
+def foo (acc,amt) 
+	error := false; 
+	transaction do 
+		bal := SQL "select balance from accounts where id = 'acc.id' limit 1;";
+		assert (!usr.empty); 
+		if bal >= amt then 
+			newbal := bal - amt;
+			SQL "update accounts set balance = newbal where id = 'acc.id';"
+		else 
+			error := true 
+		end 
+	end;
+	if error then 
+		throw InsufficientBalException
+	end
+end
+
+def bar (a)
+	a:=b
+end
