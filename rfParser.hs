@@ -14,19 +14,18 @@ import Text.Parsec.Char
 import SQLParser.PGSqlParser
 
 data Expr 	= Var String | Con Bool | Uno Unop Expr | Duo Duop Expr Expr 
-		| Dot Expr Expr | Query String 
+		| Dot Expr Expr | Query String | Map 
 		deriving Show
 data Unop 	= Not deriving Show
-data Duop 	= And | Or | Geq | Sub | Iff deriving Show
+data Duop 	= And | Or | Geq | Leq | Sub | Equals deriving Show
 --data SQL	= Query | DML deriving Show
 data Stmt 	= Nop 
-		| DML String
+		| Beg String | Roll String | Commit String | DML String
 		| String := Expr 
-		| IfEl Expr Stmt Stmt 
-		| If Expr Stmt
+		| IfEl Expr Stmt Stmt | If Expr Stmt
 		| Assert (Expr)
 		| Transaction Stmt
-		| Foreach Stmt
+		| Foreach Stmt	| Mapeach Expr Stmt
 		| Throw Expr
 		| Seq [Stmt]
 		deriving Show
@@ -40,13 +39,13 @@ def = emptyDef{ commentStart = "{-"
 	, commentEnd = "-}"
 	, identStart = letter
 	, identLetter = alphaNum
-	, opStart = oneOf "!&>=:|-."
-	, opLetter = oneOf "!&>=:|-."
-	, reservedOpNames = ["!", "&", ">=", "=", "-", ":=", "|", "."]
-	, reservedNames = ["true", "false", "nop", "throw", 
-			"if", "then", "else", "end", "SQL",
-			"assert", "do", "foreach", "def",  
-			"transaction"]
+	, opStart = oneOf "!&><=:|-."
+	, opLetter = oneOf "!&><=:|-."
+	, reservedOpNames = ["!", "&", ">=", "<=", "==", "-", ":=", "|", "."]
+	, reservedNames = ["true", "false", "nop", "throw", "begin",
+			"if", "then", "else", "end", "SQL", "commit",
+			"assert", "do", "foreach", "def", "rollback", 
+			"transaction", "map"]
 	}
 
 
@@ -54,7 +53,7 @@ TokenParser{ parens = m_parens
 	, identifier = m_identifier
 	, reservedOp = m_reservedOp
 	, reserved = m_reserved
-	, semiSep1 = m_semiSep1
+	, semiSep = m_semiSep1
 	, commaSep1 = m_commaSep1
 	, stringLiteral = m_stringLiteral
 	, whiteSpace = m_whiteSpace } = makeTokenParser def
@@ -81,12 +80,14 @@ table = [ [Prefix (m_reservedOp "!" >> return (Uno Not))]
 	, [Infix (m_reservedOp "&" >> return (Duo And)) AssocLeft]
 	, [Infix (m_reservedOp "|" >> return (Duo Or)) AssocLeft]
 	, [Infix (m_reservedOp ">=" >> return (Duo Geq)) AssocLeft]
+	, [Infix (m_reservedOp "<=" >> return (Duo Leq)) AssocLeft]
 	, [Infix (m_reservedOp "-" >> return (Duo Sub)) AssocLeft]
 	, [Infix (m_reservedOp "." >> return (Dot)) AssocLeft]
-	, [Infix (m_reservedOp "=" >> return (Duo Iff)) AssocLeft]
+	, [Infix (m_reservedOp "==" >> return (Duo Equals)) AssocLeft]
 	]
 term = try (m_parens exprparser)
 	<|> try ( fmap Var m_identifier)
+	<|> try (m_reserved "map" >> return Map)
 	<|> try (m_reserved "true" >> return (Con True))
 	<|> try (m_reserved "false" >> return (Con False))
 	<|> do 	{ m_reserved "SQL"
@@ -129,9 +130,9 @@ statementparser = whitespace >> stmtparser
     where
       stmtparser :: Parser Stmt
       stmtparser = fmap Seq (m_semiSep1 stmt1)
-      stmt1 = try nopst <|> try dmlst <|> try assignst <|> try ifelsest 
-		<|> try ifst <|> try transtst <|> try assertst <|> try foreachst 
-		<|> try throwst
+      stmt1 = try nopst <|> try begtrans <|> try rolltrans <|> try commtrans <|> try dmlst 
+		<|> try assignst <|> try ifelsest <|> try ifst <|> try transtst 
+		<|> try assertst <|> try foreachst <|> try throwst
 
 nopst = do 	{ m_reserved "nop" 
 		; return Nop
@@ -173,6 +174,35 @@ assertst = do 	{ m_reserved "assert"
 		; b <- exprparser
 		; return (Assert b)
 		}
+
+begtrans = do	{ m_reserved "SQL"
+		; leftparan
+		; m_reserved "begin"
+		; whitespace 
+		; m_reserved "transaction"
+		; rightparan
+		; return (Beg "transaction")
+		} 
+
+rolltrans = do	{ m_reserved "SQL"
+		; leftparan
+		; m_reserved "rollback"
+		; whitespace 
+		; m_reserved "transaction"
+		; rightparan
+		; return (Roll "transaction")
+		}
+
+commtrans = do	{ m_reserved "SQL"
+		; leftparan
+		; m_reserved "commit"
+		; whitespace 
+		; m_reserved "transaction"
+		; rightparan
+		; return (Commit "transaction")
+		}
+
+
 transtst = do	{ m_reserved "transaction"
 		; whitespace
 		; m_reserved "do"
